@@ -1,58 +1,66 @@
+
+#================================================ Skips GUI on Render and not on local system
 import cv2
 import numpy as np
 import os
 import json
-from tkinter import *
-from tkinter import messagebox
-from PIL import Image, ImageTk
+from PIL import Image as PILImage, ImageTk
 from datetime import datetime
 from flask import Flask, jsonify  # Flask for API
 
 # Initialize Flask
 app = Flask(__name__)
 
-# Initialize tkinter
-root = Tk()
-root.title("Attendance System")
+# Check if running on Render
+if os.environ.get("RENDER"):
+    print("Running on Render, skipping Tkinter GUI")
+    root = None  # No Tkinter in Render
+else:
+    from tkinter import *
+    from tkinter import messagebox
+    root = Tk()
+    root.title("Attendance System")
 
-# Load the background image
-background_image = Image.open("Resources/background.png")
-background_image = background_image.resize((1280, 720), Image.Resampling.LANCZOS)
-background_photo = ImageTk.PhotoImage(background_image)
+if root:  # Only execute GUI-related code if Tkinter is enabled
+    # Load the background image
+    # background_image = Image.open("Resources/background.png")
+    background_image = PILImage.open("Resources/background.png")
+    background_image = background_image.resize((1280, 720), PILImage.Resampling.LANCZOS)
+    background_photo = ImageTk.PhotoImage(background_image)
 
-# Load the image to display after marking attendance
-marked_image_path = "Resources/3.png"
-marked_image = Image.open(marked_image_path)
+    # Load the image to display after marking attendance
+    marked_image_path = "Resources/3.png"
+    marked_image = PILImage.open(marked_image_path)
 
-# Create a white background of 640x495 pixels
-background = Image.new('RGB', (640, 495), (255, 255, 255))
+    # Create a white background of 640x495 pixels
+    background = PILImage.new('RGB', (640, 495), (255, 255, 255))
 
-# Calculate the position to paste the marked image at the center
-marked_image_width, marked_image_height = marked_image.size
-center_x = (640 - marked_image_width) // 2
-center_y = (495 - marked_image_height) // 2
+    # Calculate the position to paste the marked image at the center
+    marked_image_width, marked_image_height = marked_image.size
+    center_x = (640 - marked_image_width) // 2
+    center_y = (495 - marked_image_height) // 2
 
-# Paste the marked image onto the background at the center
-background.paste(marked_image, (center_x, center_y))
+    # Paste the marked image onto the background at the center
+    background.paste(marked_image, (center_x, center_y))
 
-marked_photo = ImageTk.PhotoImage(background)
+    marked_photo = ImageTk.PhotoImage(background)
 
-# Set up the GUI elements
-canvas = Canvas(root, width=1280, height=720)
-canvas.pack()
-canvas.create_image(0, 0, anchor=NW, image=background_photo)
+    # Set up the GUI elements
+    canvas = Canvas(root, width=1280, height=720)
+    canvas.pack()
+    canvas.create_image(0, 0, anchor=NW, image=background_photo)
 
-# Adjust positions for the elements
-video_label = Label(root)
-canvas.create_window(50, 150, anchor=NW, window=video_label)
+    # Adjust positions for the elements
+    video_label = Label(root)
+    canvas.create_window(50, 150, anchor=NW, window=video_label)
 
-# Title label
-title_label = Label(root, text="Attendance Status", font=("Algerian", 15, "bold"), bg='white', fg='black')
-canvas.create_window(1007, 75, anchor="center", window=title_label)
+    # Title label
+    title_label = Label(root, text="Attendance Status", font=("Algerian", 15, "bold"), bg='white', fg='black')
+    canvas.create_window(1007, 75, anchor="center", window=title_label)
 
-# Info label
-info_label = Label(root, text="Information will be displayed here.", font=("Helvetica", 16), bg='white')
-canvas.create_window(820, 150, anchor=NW, window=info_label)
+    # Info label
+    info_label = Label(root, text="Information will be displayed here.", font=("Helvetica", 16), bg='white')
+    canvas.create_window(820, 150, anchor=NW, window=info_label)
 
 # Initialize webcam
 video_capture = cv2.VideoCapture(0)
@@ -65,7 +73,6 @@ def load_face_coordinates():
     try:
         with open('coordinates_data.json', 'r') as file:
             data = json.load(file)
-            # Ensure all coordinates are integers
             return {name: [list(map(int, coords)) for coords in coords_list] for name, coords_list in data.items()}
     except FileNotFoundError:
         print("coordinates_data.json not found.")
@@ -108,14 +115,13 @@ def process_frame():
     frame = cv2.resize(frame, (640, 495))
 
     if attendance_marked:
-        # Stop the webcam feed
         video_capture.release()
         cv2.destroyAllWindows()
-        
-        # Display the marked image
-        video_label.imgtk = marked_photo
-        video_label.configure(image=marked_photo)
-        return  # Skip the face detection part
+
+        if root:  # Only update GUI if Tkinter is enabled
+            video_label.imgtk = marked_photo
+            video_label.configure(image=marked_photo)
+        return  
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
@@ -124,17 +130,18 @@ def process_frame():
     for (x, y, w, h) in faces:
         detected = False
 
-        # Check if the detected face coordinates match any in the JSON data
         for name, coords_list in face_coordinates.items():
             for coords in coords_list:
                 cx, cy, cw, ch = coords
                 if (abs(x - cx) < 20 and abs(y - cy) < 20 and
                     abs(w - cw) < 20 and abs(h - ch) < 20):
                     info = person_info.get(name, None)
-                    if info:
-                        info_label.config(text=f"\n\nName: {name}\n\n\tTime: {datetime.now().strftime('%H:%M:%S')}\n\n{info}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Have a Nice Day!")
-                    else:
-                        info_label.config(text=f"\n\nName: {name}\n\nTime: {datetime.now().strftime('%H:%M:%S')}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\t\t Have a Nice Day!")
+                    if root:
+                        if info:
+                            info_label.config(text=f"\n\nName: {name}\n\n\tTime: {datetime.now().strftime('%H:%M:%S')}\n\n{info}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n Have a Nice Day!")
+                        else:
+                            info_label.config(text=f"\n\nName: {name}\n\nTime: {datetime.now().strftime('%H:%M:%S')}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\t\t Have a Nice Day!")
+                    
                     mark_attendance(name)
                     attendance_marked = True
                     unrecognized_shown = False
@@ -150,18 +157,17 @@ def process_frame():
             font = cv2.FONT_HERSHEY_DUPLEX
             cv2.putText(frame, "Unknown", (x + 6, y+h - 6), font, 1.0, (255, 255, 255), 1)
 
-    if not detected_any_face and not unrecognized_shown:
+    if not detected_any_face and not unrecognized_shown and root:
         messagebox.showerror("Error", "Face not recognized!")
         unrecognized_shown = True
 
-    # Display the resulting frame
-    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    image = Image.fromarray(image)
-    image = ImageTk.PhotoImage(image)
-    video_label.imgtk = image
-    video_label.configure(image=image)
-
-    video_label.after(10, process_frame)
+    if root:
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = PILImage.fromarray(image)
+        image = ImageTk.PhotoImage(image)
+        video_label.imgtk = image
+        video_label.configure(image=image)
+        video_label.after(10, process_frame)
 
 # Flask API to fetch attendance data
 @app.route('/get_attendance', methods=['GET'])
@@ -175,18 +181,17 @@ def get_attendance():
     
     attendance_list = []
     for line in lines:
-        name, time = line.strip().split(",")  # Assuming "Name, Time" format
+        name, time = line.strip().split(",")  
         attendance_list.append({"name": name, "time": time})
     
     return jsonify(attendance_list)
 
 if __name__ == "__main__":
-    # Run Flask API on Render
     import threading
     flask_thread = threading.Thread(target=lambda: app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False))
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Start GUI
-    process_frame()
-    root.mainloop()
+    if root:  # Only run GUI if Tkinter is enabled
+        process_frame()
+        root.mainloop()
