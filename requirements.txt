@@ -1,2 +1,7 @@
 Flask
 gunicorn
+opencv-python
+flask
+opencv-python
+numpy
+pillow
